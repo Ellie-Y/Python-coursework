@@ -44,7 +44,6 @@ def connect_database():
         task_id = generate_id()
         task_arrival = generate_arrival()
         task_duration = generate_duration()
-        # 插入数据
         connect.execute("INSERT INTO tasks (ID, ARRIVAL, DURATION) \
                          VALUES ('%s', '%f', '%d')" % (task_id, task_arrival, task_duration))
         task_num += 1

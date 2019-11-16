@@ -91,7 +91,7 @@ class SimulateSystem():
                 queue.put(task, block=True, timeout=None)
 
 
-    def process_data(self, i):
+    def process_data(self, i, d):
         final_time = 0
         while True:
             task = self.queue.get()
@@ -104,8 +104,8 @@ class SimulateSystem():
             if self.queue.empty():
                 print('queue is empty')
                 final_time = self.clock
+                d['clock'] = final_time
                 break
-        print('** [%f] : SIMULATION COMPLETED. **' % final_time)
 
 
     def generate_processors(self):
@@ -113,14 +113,20 @@ class SimulateSystem():
         process1.start()
         process1.join()
 
+        manager = multiprocessing.Manager()
+        d = manager.dict()
         process_list = []
         for i in range(3):
-            p = multiprocessing.Process(target=self.process_data, args=(i, ))
+            p = multiprocessing.Process(target=self.process_data, args=(i, d))
             p.start()
             process_list.append(p)
 
         for p in process_list:
             p.join()
+
+        # Assign the value obtained by 'd' to the clock
+        self.clock = list(d.values())[0]
+
 
 
 if __name__ == '__main__':

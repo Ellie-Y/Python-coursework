@@ -40,10 +40,11 @@ def connect_database():
             DURATION    INT    NOT NULL);''')
 
     task_num = 0
-    while task_num <= 100:
+    while task_num <= 20:
         task_id = generate_id()
         task_arrival = generate_arrival()
         task_duration = generate_duration()
+        # insert generated data
         connect.execute("INSERT INTO tasks (ID, ARRIVAL, DURATION) \
                          VALUES ('%s', '%f', '%d')" % (task_id, task_arrival, task_duration))
         task_num += 1
@@ -51,71 +52,75 @@ def connect_database():
 
 
 def retrieve_tasks():
-    tasks_data = connect.execute('SELECT ID, ARRIVAL, DURATION FROM tasks ORDER BY ARRIVAL ASC')
+    tasks_data = connect.execute(
+        'SELECT ID, ARRIVAL, DURATION FROM tasks ORDER BY ARRIVAL ASC')
     return tasks_data
 
 
+# 当队列满了之后任务如何等待
 class SimulateSystem():
     def __init__(self, task_list, clock, queue):
         self.task_list = task_list
         self.queue = queue
         self.clock = clock
-
+        self.final_time = 0
 
     def match_id(self):
         approved_tasks = []
-        matched_id = '[a-zA-Z]+[^a-zA-Z0-9]+'
         for row in self.task_list:
-            now_time = self.clock + row[1]  # update clock
+            now_time = self.clock + row[1]  # update clock to arrival time
             print('** [%s] : Task [%s --- %f] with duration [%d] enters the system'
                   % (now_time, row[0], row[1], row[2]))
-    
-            if not re.match(matched_id, row[0]):
+            # at least 1 uppercase letter, lowercase letter, symbol or
+            # at least 1 uppercase letter, number, symbol or
+            # at least 1 lowercase letter, number, symbol or
+            # at least 1 uppercase letter, lowercase letter, number
+            if not re.match(r'(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[\W_])|(?=.*?[A-Z])(?=.*?[0-9])(?=.*?[\W_])|(?=.*?[a-z])(?=.*?[0-9])(?=.*?[\W_])|(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])', row[0]):
                 print('** Task [%s] unfeasible and discarded' % row[0])
             else:
                 approved_tasks.append(row)
                 print('** Task [%s] accepted.' % row[0])
         self.task_list = approved_tasks
         self.clock = now_time
-        print('passed tasks！！')
-        print(self.task_list)
-
+        # print(self.task_list)
 
     def save_data(self):
+        # iterate the task into a queue
         for task in self.task_list:
-            if not self.queue.full():
-                self.queue.put_nowait(task)
-            else:
+            self.queue.put_nowait(task)
+            if self.queue.full():
                 task = self.queue.get()
                 print('Task [%s] on hold.' % task[0])
+                # on hold task(s) go to the processor immediately when it's available
                 queue.put(task, block=True, timeout=None)
 
-
     def process_data(self, i, d):
-        final_time = 0
         while True:
             task = self.queue.get()
             print('** [%f] : Task [%s] assigned to processor [%d #].'
-                % (self.clock, task[0], i))
+                  % (self.clock, task[0], i))
             # print('duration --- %d, task id --- %s' % (task[2], task[0]))
             time.sleep(task[2])
             self.clock += task[2]
             print('** [%f] : Task [%s] completed.' % (self.clock, task[0]))
             if self.queue.empty():
-                print('queue is empty')
-                final_time = self.clock
-                d['clock'] = final_time
+                self.final_time = self.clock
+                # clock is valuable
+                d['clock'] = self.final_time
+                # print('queue is empty')
                 break
 
-
     def generate_processors(self):
+        # process1 stores the approved tasks to a queue
         process1 = multiprocessing.Process(target=self.save_data, args=())
         process1.start()
         process1.join()
 
+        process_list = []
+        # using manager to share memory objects
         manager = multiprocessing.Manager()
         d = manager.dict()
-        process_list = []
+
         for i in range(3):
             p = multiprocessing.Process(target=self.process_data, args=(i, d))
             p.start()
@@ -124,15 +129,15 @@ class SimulateSystem():
         for p in process_list:
             p.join()
 
-        # Assign the value obtained by 'd' to the clock
+        #retrieve the latest clock time from d then pass to the clock
         self.clock = list(d.values())[0]
-
+        connect.close()  # close SQLite
 
 
 if __name__ == '__main__':
     connect = sqlite3.connect('dataset-class.db')
     connect_database()
-    #pass the content from database
+    # retrieve the task data from database
     task_list = retrieve_tasks()
     clock = generate_clock()
     queue = multiprocessing.Manager().Queue()

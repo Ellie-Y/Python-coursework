@@ -57,13 +57,13 @@ def retrieve_tasks():
     return tasks_data
 
 
-# 当队列满了之后任务如何等待
 class SimulateSystem():
     def __init__(self, task_list, clock, queue):
         self.task_list = task_list
         self.queue = queue
         self.clock = clock
         self.final_time = 0
+        
 
     def match_id(self):
         approved_tasks = []
@@ -84,6 +84,7 @@ class SimulateSystem():
         self.clock = now_time
         # print(self.task_list)
 
+
     def save_data(self):
         # iterate the task into a queue
         for task in self.task_list:
@@ -95,20 +96,24 @@ class SimulateSystem():
                 queue.put(task, block=True, timeout=None)
 
     def process_data(self, i, d):
-        while True:
-            task = self.queue.get()
-            print('** [%f] : Task [%s] assigned to processor [%d #].'
-                  % (self.clock, task[0], i))
-            # print('duration --- %d, task id --- %s' % (task[2], task[0]))
-            time.sleep(task[2])
-            self.clock += task[2]
-            print('** [%f] : Task [%s] completed.' % (self.clock, task[0]))
-            if self.queue.empty():
-                self.final_time = self.clock
-                # clock is valuable
-                d['clock'] = self.final_time
-                # print('queue is empty')
+        while not self.queue.empty():
+            try:
+                # non-blocking way to prevent infinite loop
+                task = self.queue.get(block=False)
+                print('** [%f]: Task [%s] assigned to processor [%d #].'
+                      % (self.clock, task[0], i))
+                # print('duration --- %d, task id --- %s' % (task[2], task[0]))
+                time.sleep(task[2])
+                self.clock += task[2]
+                print('** [%f] : Task [%s] completed.' % (self.clock, task[0]))
+            except:
+                # if queue is empty, break the loop
                 break
+
+        self.final_time = self.clock
+        # pass the finish time to clock, the clock of d['clock'] is a variate
+        d['clock'] = self.final_time
+
 
     def generate_processors(self):
         # process1 stores the approved tasks to a queue

@@ -23,7 +23,7 @@ class SimulateSystem():
         self.task_list = task_list
         self.queue = queue
         self.clock = clock
-        self.final_time = 0
+        self.final_time = 0  # record the final time after processors finished
 
     def match_id(self):
         approved_tasks = []
@@ -31,10 +31,10 @@ class SimulateSystem():
             now_time = self.clock + row[1]  # update clock to arrival time
             print('** [%s] : Task [%s] with duration [%d] enters the system'
                   % (now_time, row[0], row[2]))
-            # at least 1 uppercase letter, lowercase letter, symbol or
-            # at least 1 uppercase letter, number, symbol or
-            # at least 1 lowercase letter, number, symbol or
-            # at least 1 uppercase letter, lowercase letter, number
+            # at least 1 uppercase letter, lowercase letter, symbol
+            # or at least 1 uppercase letter, number, symbol
+            # or at least 1 lowercase letter, number, symbol
+            # or at least 1 uppercase letter, lowercase letter, number
             if not re.match(r'(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[\W_])|(?=.*?[A-Z])(?=.*?[0-9])(?=.*?[\W_])|(?=.*?[a-z])(?=.*?[0-9])(?=.*?[\W_])|(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])', row[0]):
                 print('** Task [%s] unfeasible and discarded' % row[0])
             else:
@@ -54,7 +54,7 @@ class SimulateSystem():
             try:
                 if loop:
                     # processors are available in the beignning
-                    # no on hold tasks at first time
+                    # therefore no on hold tasks at first time
                     task = self.queue.get_nowait()
                     loop = False
                 else:
@@ -67,11 +67,10 @@ class SimulateSystem():
                 self.clock += task[2]
                 print('** [%f] : Task [%s] completed.' % (self.clock, task[0]))
             except:
-                # when queue is empty, break the loop
-                break
+                break  # when queue is empty, break the loop
 
         self.final_time = self.clock
-        # pass the finish time to clock, the clock of d['clock'] is a variate
+        # pass the final time to clock
         d['clock'] = self.final_time
 
     def generate_processors(self):
@@ -83,6 +82,7 @@ class SimulateSystem():
         process_list = []
         # using manager to share memory objects
         manager = multiprocessing.Manager()
+        # Communication between processes, in order to get the latest updated time
         d = manager.dict()
 
         # generate three identical processors
@@ -92,11 +92,11 @@ class SimulateSystem():
             process_list.append(p)
 
         for p in process_list:
-            p.join()
+            p.join()  # block until all processes are finished
 
-        # retrieve the latest clock time from d then pass to the clock
+        # retrieve the latest clock time from d, and pass it to clock
         self.clock = list(d.values())[0]
-        connect.close()  # close SQLite
+        connect.close()  # close database
 
 
 if __name__ == '__main__':
@@ -109,6 +109,6 @@ if __name__ == '__main__':
     print('** SYSTEM INITIALISED **')
     simulator = SimulateSystem(task_list, clock, queue)
     simulator.match_id()
-    print()  # approved tasks
+    print()  # approved tasks from here
     simulator.generate_processors()
     print('** [%f] : SIMULATION COMPLETED. **' % simulator.clock)
